@@ -457,3 +457,35 @@ export async function getCashoutRequests(): Promise<
 
   return { cashouts };
 }
+
+export async function getSellerDashboardData(): Promise<
+  | {
+      storeName: string;
+      totalProducts: number;
+      pendingProducts: number;
+      totalSales: number;
+    }
+  | { error: string }
+> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const store = await getStoreId(supabase, user.id);
+  if (!store) return { error: "No store found." };
+
+  const { data: products } = await supabase
+    .from("products")
+    .select("status")
+    .eq("store_id", store.id);
+
+  const totalProducts = products?.length ?? 0;
+  const pendingProducts = products?.filter(p => p.status === "pending").length ?? 0;
+
+  return {
+    storeName: store.name,
+    totalProducts,
+    pendingProducts,
+    totalSales: 0,
+  };
+}

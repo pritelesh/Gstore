@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { User, MapPin, Package, LogOut, Edit3, Plus } from "lucide-react";
+import { User, MapPin, Package, LogOut, Edit3, Plus, Store, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 import { createClient } from "@/lib/supabase/client";
-import { signOut } from "@/lib/actions/auth";
+import { signOut, upgradeToSeller } from "@/lib/actions/auth";
 
-type Tab = "profile" | "orders" | "addresses";
+type Tab = "profile" | "orders" | "addresses" | "seller";
 
 const mockOrders = [
   { id: "#ORD-001", date: "2026-07-20", status: "Delivered", total: 2499, items: 2 },
@@ -41,6 +41,12 @@ export default function AccountPage() {
   const [phone, setPhone] = useState("");
   const [initial, setInitial] = useState("?");
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<string | null>(null);
+  const [sellerStoreName, setSellerStoreName] = useState("");
+  const [sellerDesc, setSellerDesc] = useState("");
+  const [sellerError, setSellerError] = useState("");
+  const [sellerSubmitting, setSellerSubmitting] = useState(false);
+  const [sellerDone, setSellerDone] = useState(false);
 
   useEffect(() => {
     const initUser = async () => {
@@ -53,18 +59,30 @@ export default function AccountPage() {
       setInitial(nameFromMeta.charAt(0).toUpperCase() || (user.email?.charAt(0).toUpperCase() ?? "?"));
       const { data: profile } = await supabase
         .from("profiles")
-        .select("name, phone")
+        .select("full_name, phone, role")
         .eq("id", user.id)
         .single();
       if (profile) {
-        setName(profile.name);
+        setName(profile.full_name);
         setPhone(profile.phone ?? "");
-        setInitial(profile.name.charAt(0).toUpperCase());
+        setInitial(profile.full_name.charAt(0).toUpperCase());
+        if (profile.role) setRole(profile.role);
       }
       setLoading(false);
     };
     initUser();
   }, []);
+
+  const handleUpgrade = async () => {
+    setSellerError("");
+    if (!sellerStoreName) { setSellerError("Store name is required."); return; }
+    setSellerSubmitting(true);
+    const res = await upgradeToSeller({ storeName: sellerStoreName, storeDescription: sellerDesc || undefined });
+    if (res.type === "error") { setSellerError(res.error); setSellerSubmitting(false); return; }
+    setSellerSubmitting(false);
+    setSellerDone(true);
+    setRole("seller");
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -96,12 +114,22 @@ export default function AccountPage() {
                 { key: "profile" as Tab, label: "Profile", icon: User },
                 { key: "orders" as Tab, label: "Order History", icon: Package },
                 { key: "addresses" as Tab, label: "Addresses", icon: MapPin },
+                ...(role === "seller"
+                  ? [{ key: "seller" as Tab, label: "Seller Dashboard", icon: ExternalLink }]
+                  : [{ key: "seller" as Tab, label: "Become a Seller", icon: Store }]
+                ),
               ]).map((t) => {
                 const Icon = t.icon;
                 return (
                   <button
                     key={t.key}
-                    onClick={() => setActiveTab(t.key)}
+                    onClick={() => {
+                      if (role === "seller" && t.key === "seller") {
+                        router.push("/sell/dashboard");
+                      } else {
+                        setActiveTab(t.key);
+                      }
+                    }}
                     className={clsx(
                       "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-accent",
                       activeTab === t.key
@@ -272,6 +300,57 @@ export default function AccountPage() {
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "seller" && role !== "seller" && (
+              <div className="neu-flat p-6">
+                {sellerDone ? (
+                  <div className="text-center py-6">
+                    <Store size={40} className="mx-auto mb-3 text-accent" />
+                    <h2 className="text-xl font-bold text-text mb-2">Store Created!</h2>
+                    <p className="text-sm text-text/60 mb-6">Your store has been registered. You can now manage it from the seller dashboard.</p>
+                    <Link
+                      href="/sell/dashboard"
+                      className="inline-block px-6 py-3 bg-accent text-white font-semibold rounded-2xl hover:brightness-110 transition-all focus:outline-none focus:ring-2 focus:ring-accent"
+                    >
+                      Go to Dashboard
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="text-xl font-bold text-text mb-2">Become a Seller</h2>
+                    <p className="text-sm text-text/60 mb-6">Create your store and start selling on KGStore.</p>
+                    <div className="space-y-4 max-w-md">
+                      <div>
+                        <label className="text-sm text-text/70 mb-1 block">Store Name *</label>
+                        <input
+                          type="text" value={sellerStoreName}
+                          onChange={(e) => setSellerStoreName(e.target.value)}
+                          className={inputClass} placeholder="Your store name"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm text-text/70 mb-1 block">Store Description</label>
+                        <textarea
+                          value={sellerDesc}
+                          onChange={(e) => setSellerDesc(e.target.value)}
+                          className={`${inputClass} resize-none h-20`} placeholder="Briefly describe what you sell"
+                        />
+                      </div>
+                      {sellerError && (
+                        <p className="text-xs text-red-400 bg-red-400/10 rounded-lg px-3 py-2">{sellerError}</p>
+                      )}
+                      <button
+                        onClick={handleUpgrade}
+                        disabled={sellerSubmitting}
+                        className="px-6 py-3 bg-accent text-white font-semibold rounded-2xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent"
+                      >
+                        {sellerSubmitting ? "Creating…" : "Create Your Store"}
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             )}

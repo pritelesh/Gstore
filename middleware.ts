@@ -45,6 +45,25 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
+  if (pathname.startsWith("/seller") && pathname !== "/seller/login") {
+    if (!user) {
+      return NextResponse.redirect(new URL("/seller/login", request.url));
+    }
+    const { data: store } = await supabase
+      .from("stores")
+      .select("id")
+      .eq("seller_id", user.id)
+      .maybeSingle();
+    if (!store) {
+      return NextResponse.redirect(new URL("/seller/login?no_store=1", request.url));
+    }
+    return supabaseResponse;
+  }
+
+  if (pathname === "/sell" || pathname === "/sell/register") {
+    return supabaseResponse;
+  }
+
   if (pathname.startsWith("/sell")) {
     if (!user) {
       return NextResponse.redirect(new URL("/sell/register", request.url));
@@ -74,6 +93,8 @@ export const config = {
   matcher: [
     "/account",
     "/account/:path*",
+    "/seller",
+    "/seller/:path*",
     "/sell",
     "/sell/:path*",
     "/admin",

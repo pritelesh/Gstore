@@ -9,7 +9,7 @@ interface StoreQueryRow {
   description: string | null;
   status: string;
   created_at: string;
-  profile: { name: string; email: string; phone: string | null }[] | null;
+  profile: { full_name: string; email: string; phone: string | null }[] | null;
 }
 
 interface ProductQueryRow {
@@ -79,7 +79,7 @@ interface OrderQueryRow {
   courier_name: string | null;
   tracking_status: string | null;
   created_at: string;
-  profile: { name: string }[] | null;
+  profile: { full_name: string }[] | null;
 }
 
 export async function getAdminDashboard(): Promise<{
@@ -128,7 +128,7 @@ export async function getAdminSellers(): Promise<
     .from("stores")
     .select(`
       id, seller_id, name, description, status, created_at,
-      profile:profiles!inner(name, email, phone)
+      profile:profiles!inner(full_name, email, phone)
     `)
     .order("created_at", { ascending: false });
 
@@ -138,7 +138,7 @@ export async function getAdminSellers(): Promise<
     id: String(s.id),
     seller_id: s.seller_id,
     store: s.name,
-    name: s.profile?.[0]?.name ?? "Unknown",
+    name: s.profile?.[0]?.full_name ?? "Unknown",
     email: s.profile?.[0]?.email ?? "—",
     phone: s.profile?.[0]?.phone ?? "—",
     status: s.status,
@@ -185,7 +185,7 @@ export async function getAdminStores(): Promise<
     .from("stores")
     .select(`
       id, seller_id, name, description, status, created_at,
-      profile:profiles!inner(name, email),
+      profile:profiles!inner(full_name, email),
       products:products(count)
     `)
     .order("created_at", { ascending: false });
@@ -195,7 +195,7 @@ export async function getAdminStores(): Promise<
   const stores = (data ?? []).map((s: Record<string, unknown>) => ({
     id: String(s.id),
     name: s.name as string,
-    seller: ((s.profile as Record<string, unknown>[] | null)?.[0]?.name as string) ?? "Unknown",
+    seller: ((s.profile as Record<string, unknown>[] | null)?.[0]?.full_name as string) ?? "Unknown",
     products: ((s.products as Record<string, unknown>[] | null)?.[0]?.count as number) ?? 0,
     status: s.status as string,
     joined: new Date(s.created_at as string).toLocaleDateString("en-CA"),
@@ -328,7 +328,7 @@ export async function getAdminOrders(): Promise<
     .from("orders")
     .select(`
       id, customer_id, total, status, courier_name, tracking_status, created_at,
-      profile:profiles!inner(name)
+      profile:profiles!inner(full_name)
     `)
     .order("created_at", { ascending: false });
 
@@ -355,7 +355,7 @@ export async function getAdminOrders(): Promise<
     return {
       id: `#ORD-${o.id}`,
       rawId: o.id,
-      customer: o.profile?.[0]?.name ?? "Unknown",
+      customer: o.profile?.[0]?.full_name ?? "Unknown",
       store: "—",
       total: Number(o.total),
       status: statusMap[o.status] ?? o.status,

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, CheckCircle } from "lucide-react";
 import { signUp } from "@/lib/actions/auth";
 
 export default function SellRegisterPage() {
-  const [submitted, setSubmitted] = useState(false);
+  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,28 +18,15 @@ export default function SellRegisterPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
-  if (submitted) {
-    return (
-      <section className="py-24">
-        <div className="container mx-auto px-4">
-          <div className="neu-flat p-12 text-center max-w-lg mx-auto">
-            <h2 className="text-2xl font-bold text-text mb-3">Store Created!</h2>
-            <p className="text-sm text-text/60 leading-relaxed">
-              Your store has been registered. You can now manage your products
-              and orders from the dashboard.
-            </p>
-            <Link
-              href="/sell/dashboard"
-              className="inline-block mt-6 px-6 py-3 bg-accent text-white font-semibold rounded-2xl hover:brightness-110 transition-all focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              Go to Dashboard
-            </Link>
-          </div>
-        </div>
-      </section>
-    );
-  }
+  useEffect(() => {
+    if (countdown > 0) {
+      const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+      if (countdown === 1) router.push("/seller/dashboard");
+      return () => clearTimeout(t);
+    }
+  }, [countdown, router]);
 
   const handleSubmit = async () => {
     setError("");
@@ -71,11 +59,33 @@ export default function SellRegisterPage() {
       setLoading(false);
       return;
     }
-    setSubmitted(true);
+    setCountdown(3);
   };
 
   const inputClass =
     "w-full neu-pressed bg-surface text-text text-sm rounded-xl px-4 py-2.5 placeholder-text/40 focus:outline-none focus:ring-2 focus:ring-accent transition-all";
+
+  if (countdown > 0) {
+    return (
+      <section className="py-24">
+        <div className="container mx-auto px-4">
+          <div className="neu-flat p-12 text-center max-w-lg mx-auto">
+            <CheckCircle size={48} className="mx-auto text-green-400 mb-4" />
+            <h2 className="text-2xl font-bold text-text mb-3">Store Created!</h2>
+            <p className="text-sm text-text/60 leading-relaxed mb-4">
+              Your store has been registered. Redirecting to dashboard in {countdown}s...
+            </p>
+            <Link
+              href="/seller/dashboard"
+              className="inline-block px-6 py-3 bg-accent text-white font-semibold rounded-2xl hover:brightness-110 transition-all focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              Go to Dashboard
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="py-16 md:py-24">
@@ -172,7 +182,7 @@ export default function SellRegisterPage() {
 
           <p className="text-sm text-text/50 text-center">
             Already have a store?{" "}
-            <Link href="/sell/dashboard" className="text-accent font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-accent rounded">
+            <Link href="/seller/dashboard" className="text-accent font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-accent rounded">
               Go to Dashboard
             </Link>
           </p>

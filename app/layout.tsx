@@ -3,6 +3,9 @@ import { Inter } from "next/font/google";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { CartProvider } from "@/context/CartContext";
+// DO NOT REMOVE: This import tells Tailwind to compile all @tailwind directives
+// into real CSS. If this line is missing, NO Tailwind classes will work anywhere
+// on the site — every page will render as unstyled HTML.
 import "./globals.css";
 
 const inter = Inter({

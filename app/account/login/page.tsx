@@ -28,7 +28,11 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    router.push("/account");
+    if (result.role === "seller") {
+      router.push("/sell/dashboard");
+    } else {
+      router.push("/account");
+    }
   };
 
   const inputClass =

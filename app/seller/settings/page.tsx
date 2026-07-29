@@ -1,0 +1,23 @@
+"use client";
+
+import { Settings } from "lucide-react";
+
+export default function SellerSettingsPage() {
+  return (
+    <div className="p-8">
+      <div className="flex items-center gap-4 mb-8">
+        <Settings size={28} className="text-[#FE7F2D]" />
+        <div>
+          <h1 className="text-3xl font-bold text-[#FAFFC4]">Store Settings</h1>
+          <p className="text-[#FAFFC4]/60 mt-1">Manage your store settings</p>
+        </div>
+      </div>
+      <div className="bg-white/10 backdrop-blur-md rounded-2xl p-10 text-center shadow-[10px_10px_20px_#1a2354,-10px_-10px_20px_#3849ae]">
+        <p className="text-[#FAFFC4]/50 text-lg">Settings page coming soon</p>
+        <p className="text-[#FAFFC4]/30 text-sm mt-2">
+          Here you&apos;ll be able to update your store name, description, and preferences.
+        </p>
+      </div>
+    </div>
+  );
+}

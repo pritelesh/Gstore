@@ -1,22 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ShoppingCart, User, Menu, X } from "lucide-react";
+import { ShoppingCart, User, Menu, X, LayoutDashboard } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-
-const navLinks = [
-  { label: "Home", href: "/" },
-  { label: "Products", href: "/products" },
-  { label: "Seasonal", href: "/seasonal" },
-  { label: "Sell", href: "/sell" },
-  { label: "Track Order", href: "/track-order" },
-  { label: "About Us", href: "/about" },
-];
+import { createClient } from "@/lib/supabase/client";
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isSeller, setIsSeller] = useState(false);
   const { cartCount } = useCart();
+
+  useEffect(() => {
+    const checkRole = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.app_metadata?.role === "seller") setIsSeller(true);
+    };
+    checkRole();
+  }, []);
+
+  const navLinks = [
+    { label: "Home", href: "/" },
+    { label: "Products", href: "/products" },
+    { label: "Seasonal", href: "/seasonal" },
+    { label: "Seller Login", href: "/seller/login" },
+    { label: isSeller ? "Dashboard" : "Sell", href: isSeller ? "/sell/dashboard" : "/sell", icon: isSeller ? LayoutDashboard : undefined },
+    { label: "Track Order", href: "/track-order" },
+    { label: "About Us", href: "/about" },
+  ];
 
   return (
     <header className="sticky top-0 z-50">
