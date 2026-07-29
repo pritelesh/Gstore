@@ -22,7 +22,15 @@ export default async function SeasonPage({ params }: Props) {
     notFound();
   }
 
-  const products = await getProductsBySeason(season);
+  let products: Awaited<ReturnType<typeof getProductsBySeason>> = [];
+  let fetchError = false;
+  try {
+    products = await getProductsBySeason(season);
+  } catch (e) {
+    console.error("Failed to fetch seasonal products:", e);
+    fetchError = true;
+  }
+
   const displayName = seasonNames[season];
 
   return (
@@ -41,38 +49,50 @@ export default async function SeasonPage({ params }: Props) {
           {displayName} Collection
         </h1>
         <p className="text-sm text-text/60 mb-10">
-          {products.length} product{products.length !== 1 ? "s" : ""} available
+          {fetchError ? "Could not load products" : `${products.length} product${products.length !== 1 ? "s" : ""} available`}
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map((product) => (
-            <div key={product.id} className="neu-flat p-4 flex flex-col">
-              <Link
-                href={`/products/${product.id}`}
-                className="group focus:outline-none focus:ring-2 focus:ring-accent rounded-xl"
-              >
-                <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden">
-                  <Image
-                    src={product.image}
-                    alt={product.name}
-                    fill
-                    className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    unoptimized
-                  />
-                </div>
-                <div className="mt-4 mb-3">
-                  <h3 className="text-base font-semibold text-text">
-                    {product.name}
-                  </h3>
-                  <p className="text-sm text-accent font-bold mt-1">
-                    ৳{product.price.toLocaleString()}
-                  </p>
-                </div>
-              </Link>
-            </div>
-          ))}
-        </div>
+        {fetchError ? (
+          <div className="neu-flat p-10 text-center">
+            <p className="text-sm text-text/60">
+              Failed to load products. Please try again later.
+            </p>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="neu-flat p-10 text-center">
+            <p className="text-sm text-text/60">No products found in this collection.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {products.map((product) => (
+              <div key={product.id} className="neu-flat p-4 flex flex-col">
+                <Link
+                  href={`/products/${product.id}`}
+                  className="group focus:outline-none focus:ring-2 focus:ring-accent rounded-xl"
+                >
+                  <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden">
+                    <Image
+                      src={product.image}
+                      alt={product.name}
+                      fill
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      unoptimized
+                    />
+                  </div>
+                  <div className="mt-4 mb-3">
+                    <h3 className="text-base font-semibold text-text">
+                      {product.name}
+                    </h3>
+                    <p className="text-sm text-accent font-bold mt-1">
+                      ৳{product.price.toLocaleString()}
+                    </p>
+                  </div>
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

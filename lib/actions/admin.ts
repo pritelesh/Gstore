@@ -54,6 +54,7 @@ interface AdminProductData {
   price: number;
   status: string;
   category: string;
+  rejection_reason?: string | null;
 }
 
 interface AdminOrderData {
@@ -249,7 +250,7 @@ export async function getAdminProducts(): Promise<
   const { data, error } = await supabase
     .from("products")
     .select(`
-      id, store_id, category_id, name, price, stock, images, status, created_at,
+      id, store_id, category_id, name, price, stock, images, status, created_at, rejection_reason,
       store:stores(name),
       category:categories(name)
     `)
@@ -257,7 +258,7 @@ export async function getAdminProducts(): Promise<
 
   if (error) return { error: error.message };
 
-  const products = (data ?? []).map((p: ProductQueryRow) => ({
+  const products = (data ?? []).map((p: ProductQueryRow & { rejection_reason?: string | null }) => ({
     id: String(p.id),
     name: p.name,
     image: Array.isArray(p.images) && p.images.length > 0
@@ -267,6 +268,7 @@ export async function getAdminProducts(): Promise<
     price: Number(p.price),
     status: p.status,
     category: p.category?.[0]?.name ?? "Uncategorized",
+    rejection_reason: p.rejection_reason ?? null,
   }));
 
   return { products };
@@ -286,14 +288,17 @@ export async function approveProduct(productId: string) {
   return { success: true };
 }
 
-export async function rejectProduct(productId: string) {
+export async function rejectProduct(productId: string, reason?: string) {
   const supabase = createAdminClient();
   const numId = Number(productId);
   if (isNaN(numId)) return { error: "Invalid product ID." };
 
+  const updates: Record<string, string> = { status: "rejected" };
+  if (reason) updates.rejection_reason = reason;
+
   const { error } = await supabase
     .from("products")
-    .update({ status: "rejected" })
+    .update(updates)
     .eq("id", numId);
 
   if (error) return { error: error.message };

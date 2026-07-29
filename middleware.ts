@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (pathname.startsWith("/sell/dashboard")) {
+  if (pathname.startsWith("/sell")) {
     if (!user) {
       return NextResponse.redirect(new URL("/sell/register", request.url));
     }
@@ -74,8 +74,8 @@ export const config = {
   matcher: [
     "/account",
     "/account/:path*",
-    "/sell/dashboard",
-    "/sell/dashboard/:path*",
+    "/sell",
+    "/sell/:path*",
     "/admin",
     "/admin/:path*",
   ],

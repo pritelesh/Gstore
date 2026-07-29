@@ -20,7 +20,7 @@ export default function ProductCard({ id, name, price, image }: ProductCardProps
         href={`/products/${id}`}
         className="group focus:outline-none focus:ring-2 focus:ring-accent rounded-xl"
       >
-        <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden">
+        <div className="relative w-full h-[250px] rounded-xl overflow-hidden">
           <Image
             src={image}
             alt={name}
@@ -31,7 +31,7 @@ export default function ProductCard({ id, name, price, image }: ProductCardProps
           />
         </div>
         <div className="mt-4 mb-3">
-          <h3 className="text-base font-semibold text-text">{name}</h3>
+          <h3 className="text-xl font-semibold text-text">{name}</h3>
           <p className="text-sm text-accent font-bold mt-1">
             ৳{price.toLocaleString()}
           </p>

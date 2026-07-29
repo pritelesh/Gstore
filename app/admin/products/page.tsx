@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Trash2, RefreshCw } from "lucide-react";
+import { Trash2, RefreshCw, X } from "lucide-react";
 import clsx from "clsx";
 import { getAdminProducts, approveProduct, rejectProduct, deleteAdminProduct } from "@/lib/actions/admin";
 
@@ -15,6 +15,7 @@ interface Product {
   price: number;
   status: string;
   category: string;
+  rejection_reason?: string | null;
 }
 
 const statusBadge = (s: string) => {
@@ -36,6 +37,8 @@ const displayStatus = (s: string) => {
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -55,14 +58,27 @@ export default function AdminProductsPage() {
   };
 
   const handleApprove = async (id: string) => {
+    setProducts((prev) => prev.filter((p) => p.id !== id));
     const res = await approveProduct(id);
-    if ("success" in res) fetchProducts();
+    if ("error" in res) fetchProducts();
   };
 
   const handleReject = async (id: string) => {
-    const res = await rejectProduct(id);
-    if ("success" in res) fetchProducts();
+    const res = await rejectProduct(id, rejectReason || undefined);
+    if ("success" in res) {
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      setRejectingId(null);
+      setRejectReason("");
+    } else {
+      fetchProducts();
+    }
   };
+
+  const sorted = [...products].sort((a, b) => {
+    if (a.status === "pending" && b.status !== "pending") return -1;
+    if (a.status !== "pending" && b.status === "pending") return 1;
+    return 0;
+  });
 
   if (loading) {
     return (
@@ -75,6 +91,7 @@ export default function AdminProductsPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-text">Manage Products</h2>
+
       <div className="neu-flat overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -89,7 +106,7 @@ export default function AdminProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => (
+              {sorted.map((p) => (
                 <tr key={p.id} className="border-b border-white/5 hover:bg-white/5">
                   <td className="px-4 py-3">
                     <Link href={`/products/${p.id}`} className="flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded">
@@ -103,16 +120,44 @@ export default function AdminProductsPage() {
                   <td className="px-4 py-3 text-text">৳{p.price}</td>
                   <td className="px-4 py-3 text-text/50">{p.category}</td>
                   <td className="px-4 py-3">
-                    <span className={clsx("text-xs font-semibold px-2 py-0.5 rounded-lg", statusBadge(p.status))}>
-                      {displayStatus(p.status)}
-                    </span>
+                    <div>
+                      <span className={clsx("text-xs font-semibold px-2 py-0.5 rounded-lg", statusBadge(p.status))}>
+                        {displayStatus(p.status)}
+                      </span>
+                      {p.status === "rejected" && p.rejection_reason && (
+                        <p className="text-xs text-red-400 mt-1 max-w-xs">{p.rejection_reason}</p>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {p.status === "pending" && (
                         <>
-                          <button onClick={() => handleApprove(p.id)} className="text-xs text-green-400 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-green-400 rounded">Approve</button>
-                          <button onClick={() => handleReject(p.id)} className="text-xs text-red-400 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-red-400 rounded">Reject</button>
+                          <button onClick={() => handleApprove(p.id)} className="text-xs text-green-400 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-green-400 rounded">
+                            Approve
+                          </button>
+                          {rejectingId === p.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                                placeholder="Reason (optional)"
+                                className="w-36 neu-pressed bg-surface text-text text-xs rounded-lg px-2 py-1 placeholder-text/40 focus:outline-none focus:ring-2 focus:ring-accent"
+                                autoFocus
+                              />
+                              <button onClick={() => handleReject(p.id)} className="text-xs text-red-400 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-red-400 rounded">
+                                Confirm
+                              </button>
+                              <button onClick={() => { setRejectingId(null); setRejectReason(""); }} className="text-text/40 hover:text-text">
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setRejectingId(p.id)} className="text-xs text-red-400 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-red-400 rounded">
+                              Reject
+                            </button>
+                          )}
                         </>
                       )}
                       {p.status !== "pending" && (

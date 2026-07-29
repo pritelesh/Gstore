@@ -23,7 +23,7 @@ export default function DeliverySection() {
           Track your order anytime
         </p>
         <Link
-          href="/track"
+          href="/track-order"
           className="inline-block px-8 py-3.5 bg-accent text-white font-semibold rounded-2xl hover:brightness-110 transition-all focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background"
         >
           Track Order

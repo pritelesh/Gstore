@@ -56,6 +56,7 @@ export interface SellerProductData {
   category: string;
   season?: string;
   status: string;
+  rejection_reason?: string | null;
 }
 
 export interface SellerOrderData {
@@ -134,7 +135,7 @@ export async function getSellerProducts(): Promise<
   const { data, error } = await supabase
     .from("products")
     .select(`
-      id, name, price, stock, images, status, category_id,
+      id, name, price, stock, images, status, category_id, rejection_reason,
       category:categories(name, type, season)
     `)
     .eq("store_id", store.id)
@@ -142,7 +143,7 @@ export async function getSellerProducts(): Promise<
 
   if (error) return { error: error.message };
 
-  const products: SellerProductData[] = (data ?? []).map((p: ProductQueryRow) => {
+  const products: SellerProductData[] = (data ?? []).map((p: ProductQueryRow & { rejection_reason?: string | null }) => {
     const images: string[] = Array.isArray(p.images) ? p.images : [];
     return {
       id: String(p.id),
@@ -153,6 +154,7 @@ export async function getSellerProducts(): Promise<
       category: p.category?.[0]?.name ?? "Uncategorized",
       season: p.category?.[0]?.season ?? undefined,
       status: p.status,
+      rejection_reason: p.rejection_reason ?? null,
     };
   });
 

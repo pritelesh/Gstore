@@ -4,8 +4,8 @@ import { Package, Truck, Building2, Ship } from "lucide-react";
 const footerLinks = [
   { label: "About Us", href: "/about" },
   { label: "Track Order", href: "/track-order" },
-  { label: "Create Your Store", href: "/create-store" },
-  { label: "Contact", href: "/contact" },
+  { label: "Create Your Store", href: "/sell" },
+  { label: "Contact", href: "/about" },
 ];
 
 const courierPartners = [
