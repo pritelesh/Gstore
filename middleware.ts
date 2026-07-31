@@ -45,9 +45,9 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (pathname.startsWith("/seller") && pathname !== "/seller/login") {
+  if (pathname.startsWith("/seller") && pathname !== "/seller/login" && pathname !== "/seller") {
     if (!user) {
-      return NextResponse.redirect(new URL("/seller/login", request.url));
+      return NextResponse.redirect(new URL("/seller", request.url));
     }
     const { data: store } = await supabase
       .from("stores")
@@ -55,7 +55,7 @@ export async function middleware(request: NextRequest) {
       .eq("seller_id", user.id)
       .maybeSingle();
     if (!store) {
-      return NextResponse.redirect(new URL("/seller/login?no_store=1", request.url));
+      return NextResponse.redirect(new URL("/seller", request.url));
     }
     return supabaseResponse;
   }
@@ -64,7 +64,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (pathname.startsWith("/sell")) {
+  if (pathname.startsWith("/sell") && !pathname.startsWith("/seller")) {
     if (!user) {
       return NextResponse.redirect(new URL("/sell/register", request.url));
     }
@@ -80,7 +80,15 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/account/login", request.url));
     }
     const role = user.app_metadata?.role as string | undefined;
-    if (role !== "admin") {
+    if (role === "admin") {
+      return supabaseResponse;
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile?.role !== "admin") {
       return NextResponse.redirect(new URL("/", request.url));
     }
     return supabaseResponse;

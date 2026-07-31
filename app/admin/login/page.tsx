@@ -2,15 +2,15 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { sellerSignIn } from "@/lib/actions/auth";
+import { adminSignIn } from "@/lib/actions/auth";
 
-function LoginForm() {
+function AdminLoginForm() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(
-    searchParams.get("no_store") === "1"
-      ? 'No seller account found. Please <a href="/sell/register" class="underline font-bold">create your store</a> first.'
+    searchParams.get("access") === "denied"
+      ? "You need admin access to view this page."
       : "",
   );
   const [loading, setLoading] = useState(false);
@@ -20,22 +20,20 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const result = await sellerSignIn({ email, password });
+      const result = await adminSignIn({ email, password });
 
       if (result.type === "error") {
-        if (result.error === "NO_SELLER_ACCOUNT") {
-          setError(
-            'No seller account found. Please <a href="/sell/register" class="underline font-bold">create your store</a> first.',
-          );
+        if (result.error === "NO_ADMIN_ACCESS") {
+          setError("This account does not have admin access.");
         } else {
           setError(result.error);
         }
         return;
       }
 
-      window.location.href = "/seller/dashboard";
+      window.location.href = "/admin";
     } catch (err) {
-      console.error("[SellerLogin] signIn exception:", err);
+      console.error("[AdminLogin] signIn exception:", err);
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setLoading(false);
@@ -50,8 +48,8 @@ function LoginForm() {
     <div className="min-h-screen bg-[#293681] flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-white/10 backdrop-blur-md rounded-3xl p-8 shadow-[20px_20px_40px_#1a2354,-20px_-20px_40px_#3849ae]">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-[#FAFFC4]">Seller Login</h1>
-          <p className="text-[#FAFFC4]/70 mt-2">Sign in to manage your store</p>
+          <h1 className="text-3xl font-bold text-[#FAFFC4]">Admin Login</h1>
+          <p className="text-[#FAFFC4]/70 mt-2">Sign in to manage the platform</p>
         </div>
 
         <div className="space-y-5" onKeyDown={handleKeyDown}>
@@ -62,7 +60,7 @@ function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-[#293681] text-[#FAFFC4] placeholder-[#FAFFC4]/40 border border-[#FAFFC4]/20 focus:outline-none focus:border-[#FE7F2D] shadow-[inset_6px_6px_12px_#1a2354,inset_-6px_-6px_12px_#3849ae]"
-              placeholder="seller@example.com"
+              placeholder="admin@example.com"
             />
           </div>
 
@@ -89,25 +87,18 @@ function LoginForm() {
 
         {error && (
           <div className="mt-5 p-4 rounded-xl bg-red-500/20 border border-red-500/40 text-[#FAFFC4] text-sm text-center">
-            <span dangerouslySetInnerHTML={{ __html: error }} />
+            {error}
           </div>
         )}
-
-        <p className="mt-6 text-center text-[#FAFFC4]/60 text-sm">
-          Don&apos;t have a seller account?{" "}
-          <a href="/sell/register" className="text-[#FE7F2D] font-semibold hover:underline">
-            Create your store
-          </a>
-        </p>
       </div>
     </div>
   );
 }
 
-export default function SellerLoginPage() {
+export default function AdminLoginPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#293681]" />}>
-      <LoginForm />
+      <AdminLoginForm />
     </Suspense>
   );
 }

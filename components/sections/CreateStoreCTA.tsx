@@ -13,7 +13,7 @@ export default function CreateStoreCTA() {
             and reach customers across Bangladesh.
           </p>
           <Link
-            href="/sell"
+            href="/seller"
             className="inline-block px-8 py-3.5 bg-accent text-white font-semibold rounded-2xl hover:brightness-110 transition-all focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background"
           >
             Create Your Store

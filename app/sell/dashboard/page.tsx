@@ -146,6 +146,14 @@ export default function SellDashboardPage() {
           </div>
         </div>
 
+        {storeStatus === "pending" && (
+          <div className="neu-flat p-4 mb-6 border-l-4 border-accent bg-accent/5">
+            <p className="text-sm text-text font-medium">
+              Your seller account is pending admin approval. You can set up your store, but products won&apos;t go live until approved.
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="lg:w-1/5">
             <div className="neu-flat p-3 space-y-1">

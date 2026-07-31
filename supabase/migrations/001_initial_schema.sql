@@ -6,7 +6,7 @@
 create table public.profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   role        text not null default 'customer' check (role in ('customer','seller','admin')),
-  name        text not null,
+  full_name   text not null,
   email       text not null,
   phone       text,
   created_at  timestamptz not null default now()
@@ -106,7 +106,9 @@ alter table public.cashout_requests enable row level security;
 -- Helper: is_admin()
 create or replace function public.is_admin()
 returns boolean
-language sql stable
+language sql
+security definer
+stable
 as $$
   select exists (
     select 1 from public.profiles
@@ -117,7 +119,9 @@ $$;
 -- Helper: is_seller()
 create or replace function public.is_seller()
 returns boolean
-language sql stable
+language sql
+security definer
+stable
 as $$
   select exists (
     select 1 from public.profiles

@@ -37,7 +37,7 @@ export default function SellLandingPage() {
             of customers. No upfront fees, easy setup, and full control over your store.
           </p>
           <Link
-            href="/sell/register"
+            href="/seller"
             className="inline-block px-8 py-3.5 bg-accent text-white font-semibold rounded-2xl hover:brightness-110 transition-all focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background"
           >
             Get Started &mdash; It&apos;s Free
@@ -78,7 +78,7 @@ export default function SellLandingPage() {
               minutes to get started.
             </p>
             <Link
-              href="/sell/register"
+              href="/seller"
               className="inline-block px-8 py-3.5 bg-accent text-white font-semibold rounded-2xl hover:brightness-110 transition-all focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background"
             >
               Create Your Store Now

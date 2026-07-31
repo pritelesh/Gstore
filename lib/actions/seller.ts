@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 interface CategoryLookup {
   id: number;
@@ -99,13 +100,17 @@ async function getStoreId(supabase: Awaited<ReturnType<typeof createClient>>, us
 }
 
 export async function getSellerStore(): Promise<
-  | { found: true; store: { id: number; name: string; status: string } }
+  | { found: true; store: { id: number; name: string; description: string | null; status: string } }
   | { found: false; error: string }
 > {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { found: false, error: "Not authenticated." };
-  const store = await getStoreId(supabase, user.id);
+  const { data: store } = await supabase
+    .from("stores")
+    .select("id, name, description, status")
+    .eq("seller_id", user.id)
+    .maybeSingle();
   if (!store) return { found: false, error: "No store found." };
   return { found: true, store };
 }
@@ -461,6 +466,7 @@ export async function getCashoutRequests(): Promise<
 export async function getSellerDashboardData(): Promise<
   | {
       storeName: string;
+      storeStatus: string;
       totalProducts: number;
       pendingProducts: number;
       totalSales: number;
@@ -484,8 +490,193 @@ export async function getSellerDashboardData(): Promise<
 
   return {
     storeName: store.name,
+    storeStatus: store.status,
     totalProducts,
     pendingProducts,
     totalSales: 0,
   };
+}
+
+export async function toggleProductPublish(
+  productId: string,
+  publish: boolean,
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+  const store = await getStoreId(supabase, user.id);
+  if (!store) return { error: "No store found." };
+  const numId = Number(productId);
+  if (isNaN(numId)) return { error: "Invalid product ID." };
+  const newStatus = publish ? (store.status === "approved" ? "approved" : "pending") : "draft";
+  const adminDb = createAdminClient();
+  const { error } = await adminDb
+    .from("products")
+    .update({ status: newStatus })
+    .eq("id", numId)
+    .eq("store_id", store.id);
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function updateStore(data: {
+  name?: string;
+  description?: string | null;
+}): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+  const updates: Record<string, unknown> = {};
+  if (data.name !== undefined) updates.name = data.name;
+  if (data.description !== undefined) updates.description = data.description;
+  const { error } = await supabase
+    .from("stores")
+    .update(updates)
+    .eq("seller_id", user.id);
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function getCurrentProfile(): Promise<
+  | { profile: { full_name: string; email: string; phone: string | null } }
+  | { error: string }
+> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("full_name, email, phone")
+    .eq("id", user.id)
+    .single();
+  if (error) return { error: error.message };
+  return { profile: { full_name: data.full_name, email: data.email, phone: data.phone } };
+}
+
+export async function updateProfile(data: {
+  full_name?: string;
+  phone?: string | null;
+}): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+  const updates: Record<string, unknown> = {};
+  if (data.full_name !== undefined) updates.full_name = data.full_name;
+  if (data.phone !== undefined) updates.phone = data.phone;
+  const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function getRecentActivity(): Promise<
+  { orders: { id: number; product_name: string; amount: number; status: string; date: string }[] }
+  | { error: string }
+> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+  const store = await getStoreId(supabase, user.id);
+  if (!store) return { error: "No store found." };
+  const { data: productIds } = await supabase
+    .from("products")
+    .select("id")
+    .eq("store_id", store.id);
+  const ids = (productIds ?? []).map(p => p.id);
+  if (ids.length === 0) return { orders: [] };
+  const { data, error } = await supabase
+    .from("order_items")
+    .select(`
+      id, order_id, product_id, quantity, price,
+      order:orders(created_at, status),
+      product:products(name)
+    `)
+    .in("product_id", ids)
+    .order("order_id", { ascending: false })
+    .limit(5);
+  if (error) return { error: error.message };
+  const orders = (data ?? []).map((oi: EarningsQueryRow) => ({
+    id: oi.order_id,
+    product_name: oi.product?.[0]?.name ?? "Unknown",
+    amount: Number(oi.price) * oi.quantity,
+    status: oi.order?.[0]?.status ?? "pending",
+    date: oi.order?.[0]?.created_at
+      ? new Date(oi.order[0].created_at).toLocaleDateString("en-CA")
+      : "—",
+  }));
+  return { orders };
+}
+
+export async function getOrderDetails(orderId: string): Promise<
+  | {
+      order: {
+        id: number;
+        total: number;
+        status: string;
+        customer_name: string;
+        customer_phone: string;
+        shipping_address: string;
+        payment_method: string;
+        created_at: string;
+        items: { product_name: string; quantity: number; price: number }[];
+      }
+    }
+  | { error: string }
+> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+  const numId = Number(orderId);
+  if (isNaN(numId)) return { error: "Invalid order ID." };
+  const { data: orderData, error: orderError } = await supabase
+    .from("orders")
+    .select(`id, total, status, created_at, customer_id, courier_name`)
+    .eq("id", numId)
+    .single();
+  if (orderError) return { error: orderError.message };
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, phone")
+    .eq("id", orderData.customer_id)
+    .single();
+  const { data: items } = await supabase
+    .from("order_items")
+    .select(`quantity, price, product:products(name)`)
+    .eq("order_id", numId);
+  return {
+    order: {
+      id: orderData.id,
+      total: Number(orderData.total),
+      status: orderData.status,
+      customer_name: profile?.full_name ?? "—",
+      customer_phone: profile?.phone ?? "—",
+      shipping_address: "—",
+      payment_method: "—",
+      created_at: new Date(orderData.created_at).toLocaleDateString("en-CA"),
+      items: (items ?? []).map((i: { quantity: number; price: number; product: { name: string }[] | null }) => ({
+        product_name: i.product?.[0]?.name ?? "Unknown",
+        quantity: i.quantity,
+        price: Number(i.price),
+      })),
+    },
+  };
+}
+
+export async function updateOrderStatus(
+  orderId: string,
+  status: string,
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+  const numId = Number(orderId);
+  if (isNaN(numId)) return { error: "Invalid order ID." };
+  const allowed = ["pending", "processing", "shipped"];
+  if (!allowed.includes(status)) return { error: "Cannot set this status." };
+  const adminDb = createAdminClient();
+  const { error } = await adminDb
+    .from("orders")
+    .update({ status })
+    .eq("id", numId);
+  if (error) return { error: error.message };
+  return { success: true };
 }

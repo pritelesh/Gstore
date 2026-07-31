@@ -8,8 +8,9 @@ const navLinks = [
   { label: "My Products", href: "/seller/products" },
   { label: "Add Product", href: "/seller/add-product" },
   { label: "Orders", href: "/seller/orders" },
+  { label: "Earnings", href: "/seller/earnings" },
+  { label: "Cashout", href: "/seller/cashout" },
   { label: "Store Settings", href: "/seller/settings" },
-  { label: "Cashout Requests", href: "/seller/cashout" },
 ];
 
 export default function SellerLayout({
@@ -22,7 +23,7 @@ export default function SellerLayout({
 
   async function handleLogout() {
     await signOut();
-    router.push("/seller/login");
+    router.push("/seller");
   }
 
   // IMPORTANT: This layout does NOT import globals.css — it doesn't need to because
@@ -30,10 +31,6 @@ export default function SellerLayout({
   // globals.css here, and DO NOT remove it from the root layout.
   // If you create any NEW nested layout.tsx files, they also should NOT import
   // globals.css unless they are intended to be standalone entry points.
-  // Don't show sidebar on login page
-  if (pathname === "/seller/login") {
-    return <>{children}</>;
-  }
 
   return (
     <div className="min-h-screen bg-[#293681] flex">

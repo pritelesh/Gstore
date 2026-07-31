@@ -1,34 +1,36 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { ShoppingCart, User, Menu, X, LayoutDashboard } from "lucide-react";
+import { ShoppingCart, User, Menu, X } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { createClient } from "@/lib/supabase/client";
 
-export default function Header() {
+type HeaderProps = {
+  role: string | null;
+  sellerHref: string;
+};
+
+export default function Header({ role, sellerHref }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [isSeller, setIsSeller] = useState(false);
   const { cartCount } = useCart();
 
-  useEffect(() => {
-    const checkRole = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.app_metadata?.role === "seller") setIsSeller(true);
-    };
-    checkRole();
-  }, []);
+  const safeSellerHref = sellerHref || "/seller";
 
   const navLinks = [
     { label: "Home", href: "/" },
     { label: "Products", href: "/products" },
     { label: "Seasonal", href: "/seasonal" },
-    { label: "Seller Login", href: "/seller/login" },
-    { label: isSeller ? "Dashboard" : "Sell", href: isSeller ? "/sell/dashboard" : "/sell", icon: isSeller ? LayoutDashboard : undefined },
     { label: "Track Order", href: "/track-order" },
     { label: "About Us", href: "/about" },
   ];
+
+  if (role === "seller" || role === "admin") {
+    navLinks.push({ label: "Seller", href: safeSellerHref });
+  }
+
+  if (role === "admin") {
+    navLinks.push({ label: "Admin", href: "/admin" });
+  }
 
   return (
     <header className="sticky top-0 z-50">

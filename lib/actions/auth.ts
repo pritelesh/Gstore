@@ -71,26 +71,62 @@ export async function signIn(data: {
   email: string;
   password: string;
 }): Promise<SignInResult> {
-  const serverClient = await createClient();
+  let serverClient;
+  try {
+    serverClient = await createClient();
+  } catch (err) {
+    console.error("[signIn] createClient error:", err);
+    return { type: "error", error: "Failed to create server client." };
+  }
 
-  const { data: authData, error } =
-    await serverClient.auth.signInWithPassword({
+  let authData;
+  try {
+    const res = await serverClient.auth.signInWithPassword({
       email: data.email,
       password: data.password,
     });
+    if (res.error) return { type: "error", error: res.error.message };
+    authData = res.data;
+  } catch (err) {
+    console.error("[signIn] signInWithPassword exception:", err);
+    return { type: "error", error: err instanceof Error ? err.message : "Auth sign-in failed." };
+  }
 
-  if (error) return { type: "error", error: error.message };
+  if (!authData?.user) return { type: "error", error: "No user returned after sign-in." };
 
-  let role = (authData.user?.app_metadata?.role as string) ?? null;
+  let role = (authData.user.app_metadata?.role as string) ?? null;
 
   // Fallback: query profiles table if app_metadata role is missing
-  if (!role && authData.user) {
-    const { data: profile } = await serverClient
-      .from("profiles")
-      .select("role")
-      .eq("id", authData.user.id)
-      .single();
-    if (profile?.role) role = profile.role;
+  if (!role) {
+    try {
+      const { data: profile, error: profileError } = await serverClient
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
+        .maybeSingle();
+      if (profileError) {
+        console.error("[signIn] profile query error:", profileError);
+      } else if (profile?.role) {
+        role = profile.role;
+      }
+    } catch (err) {
+      console.error("[signIn] profile query exception:", err);
+    }
+
+    // Admin fallback if server-client query failed (RLS may block fresh session)
+    if (!role) {
+      try {
+        const adminDb = createAdminClient();
+        const { data: adminProfile } = await adminDb
+          .from("profiles")
+          .select("role")
+          .eq("id", authData.user.id)
+          .single();
+        if (adminProfile?.role) role = adminProfile.role;
+      } catch (err) {
+        console.error("[signIn] admin fallback exception:", err);
+      }
+    }
   }
 
   return { type: "success", role };
@@ -166,6 +202,49 @@ export async function sellerSignIn(data: {
   }
 
   return { type: "success", storeName: store.name };
+}
+
+export async function adminSignIn(data: {
+  email: string;
+  password: string;
+}): Promise<
+  | { type: "error"; error: string }
+  | { type: "success"; adminName: string }
+> {
+  const serverClient = await createClient();
+
+  const { data: authData, error } =
+    await serverClient.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
+    });
+
+  if (error) return { type: "error", error: error.message };
+  if (!authData.user) return { type: "error", error: "No user returned." };
+
+  let role = (authData.user.app_metadata?.role as string) ?? null;
+  if (role !== "admin") {
+    const adminDb = createAdminClient();
+    const { data: profile } = await adminDb
+      .from("profiles")
+      .select("role")
+      .eq("id", authData.user.id)
+      .single();
+    if (profile?.role) role = profile.role;
+  }
+
+  if (role !== "admin") {
+    return { type: "error", error: "NO_ADMIN_ACCESS" };
+  }
+
+  const adminDb = createAdminClient();
+  const { data: profile } = await adminDb
+    .from("profiles")
+    .select("full_name")
+    .eq("id", authData.user.id)
+    .single();
+
+  return { type: "success", adminName: profile?.full_name ?? "Admin" };
 }
 
 export async function signOut(): Promise<ActionResult> {
