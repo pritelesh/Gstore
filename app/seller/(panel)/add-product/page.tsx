@@ -8,17 +8,18 @@ import { uploadProductImages } from "@/lib/actions/upload";
 
 export default function SellerAddProductPage() {
   const [categories, setCategories] = useState<
-    { name: string; type: string; season: string | null }[]
+    { id: string; name: string; parent_id: string | null }[]
   >([]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [discountPrice, setDiscountPrice] = useState("");
   const [stock, setStock] = useState("");
+  const [parentId, setParentId] = useState("");
   const [category, setCategory] = useState("");
-  const [season, setSeason] = useState("");
   const [productType, setProductType] = useState("physical");
   const [sizes, setSizes] = useState("");
+  const [colors, setColors] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -33,17 +34,11 @@ export default function SellerAddProductPage() {
     });
   }, []);
 
-  const normalCats = categories
-    .filter((c) => c.type === "normal")
-    .map((c) => c.name);
-  const seasonalPeriods = Array.from(
-    new Set(
-      categories
-        .filter((c) => c.type === "seasonal")
-        .map((c) => c.season)
-        .filter(Boolean),
-    ),
-  ) as string[];
+  const parents = categories.filter((c) => !c.parent_id);
+  const selectedParent = parents.find((p) => p.id === parentId);
+  const children = categories.filter((c) => c.parent_id === parentId);
+  const selectedCategoryName =
+    category || (selectedParent ? selectedParent.name : "") || "";
 
   const handleFiles = (newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles).filter((f) => f.type.startsWith("image/"));
@@ -67,18 +62,23 @@ export default function SellerAddProductPage() {
 
   const handleSubmit = async () => {
     setError("");
-    if (!name || !price || !category) {
+    const categoryName = selectedCategoryName;
+    if (!name || !price || !categoryName) {
       setError("Name, price, and category are required.");
-      return;
-    }
-    if (category === "Seasonal" && !season) {
-      setError("Please select a season for seasonal products.");
       return;
     }
 
     setSubmitting(true);
 
     let imageUrls: string[] = [];
+
+    const parseList = (raw: string) =>
+      raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    const sizeList = parseList(sizes);
+    const colorList = parseList(colors);
 
     if (files.length > 0) {
       const formData = new FormData();
@@ -98,8 +98,9 @@ export default function SellerAddProductPage() {
       price: Number(price),
       stock: Number(stock) || 0,
       images: imageUrls,
-      categoryName: category,
-      season: category === "Seasonal" ? season : undefined,
+      categoryName,
+      sizes: sizeList.length > 0 ? sizeList : undefined,
+      colors: colorList.length > 0 ? colorList : undefined,
     });
 
     if ("error" in res) {
@@ -234,44 +235,50 @@ export default function SellerAddProductPage() {
               Category *
             </label>
             <select
-              value={category}
+              value={parentId}
               onChange={(e) => {
-                setCategory(e.target.value);
-                if (e.target.value !== "Seasonal") setSeason("");
+                setParentId(e.target.value);
+                setCategory("");
               }}
               className={`${inputClass} appearance-none`}
             >
               <option value="">Select category</option>
-              {normalCats.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              {parents.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
               ))}
-              <option value="Seasonal">Seasonal</option>
             </select>
           </div>
 
-          {category === "Seasonal" && (
+          {parentId && (
             <div>
-              <label className="block text-sm font-medium text-[#FAFFC4]/70 mb-2">
-                Season *
+              <label className="block text-sm font-medium text-[#FAFFC4]/70 mb-1">
+                Subcategory {children.length > 0 ? "" : "(optional)"}
               </label>
-              <div className="flex gap-3">
-                {seasonalPeriods.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSeason(s)}
-                    className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium capitalize border-2 transition-all ${
-                      season === s
-                        ? "border-[#FE7F2D] text-[#FE7F2D] bg-[#FE7F2D]/10"
-                        : "border-[#FAFFC4]/20 text-[#FAFFC4]/60 hover:text-[#FAFFC4] bg-transparent"
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+              {children.length > 0 ? (
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className={`${inputClass} appearance-none`}
+                >
+                  <option value="">Select subcategory</option>
+                  {selectedParent && (
+                    <option value={selectedParent.name}>
+                      Use {selectedParent.name} directly
+                    </option>
+                  )}
+                  {children.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-[#FAFFC4]/50 mt-1">
+                  This category has no subcategories — it will be used directly.
+                </p>
+              )}
             </div>
           )}
 
@@ -288,6 +295,22 @@ export default function SellerAddProductPage() {
             />
             <p className="text-xs text-[#FAFFC4]/40 mt-1">
               Comma-separated list of available sizes
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#FAFFC4]/70 mb-1">
+              Colors (optional)
+            </label>
+            <input
+              type="text"
+              value={colors}
+              onChange={(e) => setColors(e.target.value)}
+              className={inputClass}
+              placeholder="e.g. Red, Blue, Black or Navy Blue, Maroon"
+            />
+            <p className="text-xs text-[#FAFFC4]/40 mt-1">
+              Comma-separated list of available colors
             </p>
           </div>
 

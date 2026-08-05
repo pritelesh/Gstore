@@ -49,12 +49,12 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       return NextResponse.redirect(new URL("/seller", request.url));
     }
-    const { data: store } = await supabase
-      .from("stores")
+    const { data: seller } = await supabase
+      .from("sellers")
       .select("id")
-      .eq("seller_id", user.id)
+      .eq("user_id", user.id)
       .maybeSingle();
-    if (!store) {
+    if (!seller) {
       return NextResponse.redirect(new URL("/seller", request.url));
     }
     return supabaseResponse;

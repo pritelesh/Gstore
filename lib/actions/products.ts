@@ -10,7 +10,9 @@ interface ProductQueryRow {
   description?: string | null;
   stock?: number;
   category_id?: number;
-  category?: { name: string; type: string; season: string | null }[] | null;
+  sizes?: unknown;
+  colors?: unknown;
+  category?: { name: string; slug: string | null; parent_id: string | null }[] | null;
   store?: { name: string }[] | null;
 }
 
@@ -32,12 +34,15 @@ export interface ProductDetail {
   storeName: string;
   stock: number;
   category_id: number;
+  sizes: string[];
+  colors: string[];
 }
 
 export interface CategoryInfo {
+  id: string;
   name: string;
-  type: string;
-  season: string | null;
+  slug: string;
+  parent_id: string | null;
 }
 
 export interface ProductFilters {
@@ -70,11 +75,16 @@ function extractImages(images: unknown): string[] {
   return [];
 }
 
+function extractStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string");
+}
+
 export async function getCategories(): Promise<CategoryInfo[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("categories")
-    .select("name, type, season")
+    .select("id, name, slug, parent_id")
     .order("name");
   if (error) throw new Error(error.message);
   return data ?? [];
@@ -90,9 +100,9 @@ export async function getProducts(
   const categoryNameFilters: string[] = [];
   if (filters.season) {
     const seasonMap: Record<string, string> = {
-      rainy: "Rainy Season",
-      summer: "Summer Season",
-      winter: "Winter Season",
+      rainy: "Rainy",
+      summer: "Summer",
+      winter: "Winter",
     };
     categoryNameFilters.push(seasonMap[filters.season]);
   }
@@ -100,7 +110,7 @@ export async function getProducts(
     categoryNameFilters.push(...filters.category);
   }
 
-  let categoryIds: number[] | undefined;
+  let categoryIds: string[] | undefined;
   if (categoryNameFilters.length > 0) {
     const { data: cats } = await supabase
       .from("categories")
@@ -116,7 +126,7 @@ export async function getProducts(
     .select(
       `
       id, name, price, images, description, stock, category_id,
-      category:categories(name, type, season),
+      category:categories(name, slug, parent_id),
       store:stores(name)
     `,
       { count: "exact" },
@@ -179,8 +189,8 @@ export async function getProductById(
     .from("products")
     .select(
       `
-      id, name, price, description, images, stock, category_id,
-      category:categories(name, type, season),
+      id, name, price, description, images, stock, category_id, sizes, colors,
+      category:categories(name, slug, parent_id),
       store:stores(name)
     `,
     )
@@ -204,6 +214,8 @@ export async function getProductById(
     storeName: p.store?.[0]?.name ?? "Unknown Store",
     stock: p.stock ?? 0,
     category_id: p.category_id ?? 0,
+    sizes: extractStrings(p.sizes),
+    colors: extractStrings(p.colors),
   };
 }
 
@@ -212,9 +224,9 @@ export async function getProductsBySeason(
 ): Promise<ProductListItem[]> {
   const supabase = await createClient();
   const seasonMap: Record<string, string> = {
-    rainy: "Rainy Season",
-    summer: "Summer Season",
-    winter: "Winter Season",
+    rainy: "Rainy",
+    summer: "Summer",
+    winter: "Winter",
   };
   const categoryName = seasonMap[season];
   if (!categoryName) return [];

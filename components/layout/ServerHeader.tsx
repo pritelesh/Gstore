@@ -35,22 +35,22 @@ export default async function ServerHeader() {
         sellerHref = "/seller/dashboard";
       } else if (role === "admin") {
         try {
-          const { data: store, error: storeError } = await supabase
-            .from("stores")
+          const { data: seller, error: sellerError } = await supabase
+            .from("sellers")
             .select("id")
-            .eq("seller_id", user.id)
+            .eq("user_id", user.id)
             .maybeSingle();
-          if (storeError) {
+          if (sellerError) {
             console.error(
-              "[ServerHeader] store lookup failed for admin; defaulting Seller link to /seller:",
-              storeError,
+              "[ServerHeader] seller lookup failed for admin; defaulting Seller link to /seller:",
+              sellerError,
             );
-          } else if (store) {
+          } else if (seller) {
             sellerHref = "/seller/dashboard";
           }
         } catch (err) {
           console.error(
-            "[ServerHeader] store lookup threw for admin; defaulting Seller link to /seller:",
+            "[ServerHeader] seller lookup threw for admin; defaulting Seller link to /seller:",
             err,
           );
         }

@@ -2,14 +2,12 @@
 
 import { useState, useEffect, Fragment } from "react";
 import Image from "next/image";
-import { Trash2, Edit3, Upload, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Trash2, Edit3, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import {
   getSellerStore,
-  getCategories,
   getSellerProducts,
-  createProduct,
-  updateProduct,
   deleteProduct,
   getSellerOrders,
   getSellerEarnings,
@@ -24,7 +22,7 @@ import type {
   CashoutRow,
 } from "@/lib/actions/seller";
 
-type Tab = "overview" | "products" | "add-product" | "orders" | "earnings" | "cashout";
+type Tab = "overview" | "products" | "orders" | "earnings" | "cashout";
 
 const statusBadge = (s: string) => {
   const m: Record<string, string> = {
@@ -40,14 +38,13 @@ const statusBadge = (s: string) => {
 };
 
 export default function SellDashboardPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [storeName, setStoreName] = useState("");
   const [storeInitial, setStoreInitial] = useState("M");
   const [storeStatus, setStoreStatus] = useState("");
 
-  const [categories, setCategories] = useState<{ name: string; type: string; season: string | null }[]>([]);
   const [products, setProducts] = useState<SellerProductData[]>([]);
   const [orders, setOrders] = useState<SellerOrderData[]>([]);
   const [earnings, setEarnings] = useState<EarningsRow[]>([]);
@@ -64,9 +61,6 @@ export default function SellDashboardPage() {
       setStoreInitial(storeRes.store.name.charAt(0).toUpperCase());
       setStoreStatus(storeRes.store.status);
     }
-
-    const catRes = await getCategories();
-    if ("categories" in catRes) setCategories(catRes.categories);
 
     const prodRes = await getSellerProducts();
     if ("products" in prodRes) setProducts(prodRes.products);
@@ -94,17 +88,6 @@ export default function SellDashboardPage() {
     if ("success" in res) {
       setProducts((prev) => prev.filter((p) => p.id !== id));
     }
-  };
-
-  const handleEdit = (id: string) => {
-    setEditingId(id);
-    setActiveTab("add-product");
-  };
-
-  const handleSaved = () => {
-    setEditingId(null);
-    loadAll();
-    setActiveTab("products");
   };
 
   const handleCashout = async () => {
@@ -160,7 +143,6 @@ export default function SellDashboardPage() {
               {([
                 { key: "overview" as Tab, label: "Overview" },
                 { key: "products" as Tab, label: "My Products" },
-                { key: "add-product" as Tab, label: "Add Product" },
                 { key: "orders" as Tab, label: "Orders" },
                 { key: "earnings" as Tab, label: "Sales / Earnings" },
                 { key: "cashout" as Tab, label: "Cashout Request" },
@@ -182,6 +164,17 @@ export default function SellDashboardPage() {
           </div>
 
           <div className="lg:w-4/5">
+            <div className="neu-flat p-4 mb-6 flex items-center justify-between">
+              <p className="text-sm text-text/60">
+                Add and manage products on the seller dashboard.
+              </p>
+              <button
+                onClick={() => router.push("/seller/add-product")}
+                className="px-4 py-2 bg-accent text-white text-sm font-semibold rounded-xl hover:brightness-110 transition-all focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                Add Product
+              </button>
+            </div>
             {activeTab === "overview" && (
               <div className="space-y-6">
                 <div className="neu-flat p-6">
@@ -222,7 +215,7 @@ export default function SellDashboardPage() {
                     My Products ({products.length})
                   </h2>
                   <button
-                    onClick={() => { setEditingId(null); setActiveTab("add-product"); }}
+                    onClick={() => router.push("/seller/add-product")}
                     className="px-4 py-2 bg-accent text-white text-sm font-semibold rounded-xl hover:brightness-110 transition-all focus:outline-none focus:ring-2 focus:ring-accent"
                   >
                     Add New
@@ -248,7 +241,7 @@ export default function SellDashboardPage() {
                           </span>
                         </div>
                         <div className="flex flex-col gap-2">
-                          <button onClick={() => handleEdit(p.id)} className="neu-flat p-1.5 text-text hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent rounded-xl" aria-label="Edit">
+                          <button onClick={() => router.push(`/seller/add-product?id=${p.id}`)} className="neu-flat p-1.5 text-text hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent rounded-xl" aria-label="Edit">
                             <Edit3 size={14} />
                           </button>
                           <button onClick={() => handleDelete(p.id)} className="neu-flat p-1.5 text-red-400 hover:bg-red-400/10 focus:outline-none focus:ring-2 focus:ring-red-400 rounded-xl" aria-label="Delete">
@@ -260,16 +253,6 @@ export default function SellDashboardPage() {
                   </div>
                 )}
               </div>
-            )}
-
-            {activeTab === "add-product" && (
-              <AddProductForm
-                key={editingId ?? "new"}
-                editingId={editingId}
-                products={products}
-                categories={categories}
-                onSaved={handleSaved}
-              />
             )}
 
             {activeTab === "orders" && (
@@ -480,187 +463,5 @@ export default function SellDashboardPage() {
         </div>
       </div>
     </section>
-  );
-}
-
-function AddProductForm({
-  editingId,
-  products,
-  categories,
-  onSaved,
-}: {
-  editingId: string | null;
-  products: SellerProductData[];
-  categories: { name: string; type: string; season: string | null }[];
-  onSaved: () => void;
-}) {
-  const editProduct = editingId ? products.find((p) => p.id === editingId) : null;
-
-  const [name, setName] = useState(editProduct?.name ?? "");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState(editProduct?.price.toString() ?? "");
-  const [stock, setStock] = useState(editProduct?.stock.toString() ?? "");
-  const [imagePreview, setImagePreview] = useState(editProduct?.image ?? "");
-  const [category, setCategory] = useState(
-    editProduct?.season ? "Seasonal" : (editProduct?.category ?? ""),
-  );
-  const [season, setSeason] = useState(editProduct?.season ?? "");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const normalCats = categories.filter((c) => c.type === "normal").map((c) => c.name);
-  const seasonalPeriods = Array.from(new Set(categories.filter((c) => c.type === "seasonal").map((c) => c.season).filter(Boolean))) as string[];
-
-  const handleSubmit = async () => {
-    setError("");
-    setSaving(true);
-    if (!name || !price || !category) {
-      setError("Name, price, and category are required.");
-      setSaving(false);
-      return;
-    }
-    if (category === "Seasonal" && !season) {
-      setError("Please select a season for seasonal products.");
-      setSaving(false);
-      return;
-    }
-
-    const payload = {
-      name,
-      description: description || undefined,
-      price: Number(price),
-      stock: Number(stock) || 0,
-      images: imagePreview ? [imagePreview] : [],
-      categoryName: category,
-      season: category === "Seasonal" ? season : undefined,
-    };
-
-    if (editingId) {
-      const res = await updateProduct(editingId, payload);
-      if ("error" in res) {
-        setError(res.error);
-        setSaving(false);
-        return;
-      }
-    } else {
-      const res = await createProduct(payload);
-      if ("error" in res) {
-        setError(res.error);
-        setSaving(false);
-        return;
-      }
-    }
-    setSaving(false);
-    onSaved();
-  };
-
-  const formInputClass =
-    "w-full neu-pressed bg-surface text-text text-sm rounded-xl px-4 py-2.5 placeholder-text/40 focus:outline-none focus:ring-2 focus:ring-accent transition-all";
-
-  return (
-    <div className="neu-flat p-6">
-      <h2 className="text-xl font-bold text-text mb-6">
-        {editingId ? "Edit Product" : "Add New Product"}
-      </h2>
-      <div className="space-y-5">
-        <div>
-          <label className="text-sm text-text/70 mb-1 block">Product Name *</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={formInputClass} placeholder="Product name" />
-        </div>
-
-        <div>
-          <label className="text-sm text-text/70 mb-1 block">Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} className={formInputClass + " resize-none h-20"} placeholder="Product description" />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm text-text/70 mb-1 block">Price (৳) *</label>
-            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className={formInputClass} placeholder="0" />
-          </div>
-          <div>
-            <label className="text-sm text-text/70 mb-1 block">Stock Quantity</label>
-            <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} className={formInputClass} placeholder="0" />
-          </div>
-        </div>
-
-        <div>
-          <label className="text-sm text-text/70 mb-1 block">Category *</label>
-          <select value={category} onChange={(e) => { setCategory(e.target.value); if (e.target.value !== "Seasonal") setSeason(""); }} className={formInputClass + " appearance-none"}>
-            <option value="">Select category</option>
-            {normalCats.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-            <option value="Seasonal">Seasonal</option>
-          </select>
-        </div>
-
-        {category === "Seasonal" && (
-          <div>
-            <label className="text-sm text-text/70 mb-1 block">Season *</label>
-            <div className="flex gap-3">
-              {seasonalPeriods.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSeason(s)}
-                  className={clsx(
-                    "flex-1 neu-pressed bg-surface text-sm font-medium rounded-xl px-4 py-2.5 transition-all capitalize border-2 focus:outline-none focus:ring-2 focus:ring-accent",
-                    season === s
-                      ? "border-accent text-accent"
-                      : "border-transparent text-text/60 hover:text-text",
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div>
-          <label className="text-sm text-text/70 mb-1 block">Product Image</label>
-          <div className="flex items-center gap-4">
-            <label className="flex flex-col items-center justify-center w-full h-28 neu-pressed bg-surface rounded-xl cursor-pointer hover:brightness-110 transition-all">
-              <Upload size={20} className="text-text/30 mb-1" />
-              <p className="text-xs text-text/30">Click to upload</p>
-              <input
-                type="file" accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) setImagePreview(URL.createObjectURL(file));
-                }}
-                className="hidden"
-              />
-            </label>
-            {imagePreview && (
-              <div className="relative w-28 h-28 rounded-xl overflow-hidden neu-flat flex-shrink-0">
-                <Image src={imagePreview} alt="Preview" fill className="object-cover" sizes="112px" unoptimized />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {error && (
-          <p className="text-xs text-red-400 bg-red-400/10 rounded-lg px-3 py-2">{error}</p>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            onClick={handleSubmit}
-            disabled={saving}
-            className="flex-1 px-6 py-3 bg-accent text-white font-semibold rounded-2xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent"
-          >
-            {saving ? "Saving…" : editingId ? "Update Product" : "Add Product"}
-          </button>
-          <button
-            onClick={onSaved}
-            className="px-6 py-3 border-2 border-text/20 text-text font-semibold rounded-2xl hover:bg-white/5 transition-all focus:outline-none focus:ring-2 focus:ring-accent"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

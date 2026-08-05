@@ -9,7 +9,7 @@ export default function SellerDashboardPage() {
   const [data, setData] = useState({ storeName: "", storeStatus: "", totalProducts: 0, pendingProducts: 0, totalSales: 0 });
   const [stats, setStats] = useState({ totalSales: 0, totalOrders: 0, availableBalance: 0 });
   const [pendingOrders, setPendingOrders] = useState(0);
-  const [recentActivity, setRecentActivity] = useState<{ id: number; product_name: string; amount: number; status: string; date: string }[]>([]);
+  const [recentActivity, setRecentActivity] = useState<{ id: string; product_name: string; amount: number; status: string; date: string }[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 

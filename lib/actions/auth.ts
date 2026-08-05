@@ -44,14 +44,14 @@ export async function signUp(data: {
   if (profileError) return { type: "error", error: profileError.message };
 
   if (data.role === "seller") {
-    const { error: storeError } = await adminClient.from("stores").insert({
-      seller_id: authData.user.id,
-      name: data.storeName ?? data.name + "'s Store",
-      description: data.storeDescription ?? null,
+    const { error: sellerError } = await adminClient.from("sellers").insert({
+      user_id: authData.user.id,
+      store_name: data.storeName ?? data.name + "'s Store",
+      store_description: data.storeDescription ?? null,
       status: "pending",
     });
 
-    if (storeError) return { type: "error", error: storeError.message };
+    if (sellerError) return { type: "error", error: sellerError.message };
   }
 
   const serverClient = await createClient();
@@ -142,14 +142,14 @@ export async function upgradeToSeller(data: {
   const { data: { user } } = await serverClient.auth.getUser();
   if (!user) return { type: "error", error: "Not authenticated." };
 
-  // Create store
-  const { error: storeError } = await adminClient.from("stores").insert({
-    seller_id: user.id,
-    name: data.storeName,
-    description: data.storeDescription ?? null,
+  // Create seller account
+  const { error: sellerError } = await adminClient.from("sellers").insert({
+    user_id: user.id,
+    store_name: data.storeName,
+    store_description: data.storeDescription ?? null,
     status: "pending",
   });
-  if (storeError) return { type: "error", error: storeError.message };
+  if (sellerError) return { type: "error", error: sellerError.message };
 
   // Update profiles.role
   const { error: profileError } = await adminClient
@@ -186,22 +186,22 @@ export async function sellerSignIn(data: {
   if (error) return { type: "error", error: error.message };
   if (!authData.user) return { type: "error", error: "No user returned." };
 
-  const { data: store, error: storeError } = await serverClient
-    .from("stores")
-    .select("name")
-    .eq("seller_id", authData.user.id)
+  const { data: seller, error: sellerError } = await serverClient
+    .from("sellers")
+    .select("store_name")
+    .eq("user_id", authData.user.id)
     .maybeSingle();
 
-  if (storeError) return { type: "error", error: storeError.message };
+  if (sellerError) return { type: "error", error: sellerError.message };
 
-  if (!store) {
+  if (!seller) {
     return {
       type: "error",
       error: "NO_SELLER_ACCOUNT",
     };
   }
 
-  return { type: "success", storeName: store.name };
+  return { type: "success", storeName: seller.store_name };
 }
 
 export async function adminSignIn(data: {

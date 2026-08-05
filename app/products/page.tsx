@@ -40,7 +40,7 @@ export default async function ShopPage({ searchParams }: Props) {
       getCategories(),
     ]);
     productsResult = pr;
-    categories = cats.filter((c) => c.type === "normal").map((c) => c.name);
+    categories = cats.filter((c) => !c.parent_id).map((c) => c.name);
   } catch (e) {
     console.error("Failed to fetch products:", e);
     fetchError = true;

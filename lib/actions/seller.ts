@@ -3,49 +3,46 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-interface CategoryLookup {
-  id: number;
+export interface CategoryNode {
+  id: string;
   name: string;
-  type: string;
-  season: string | null;
+  parent_id: string | null;
 }
 
 interface ProductQueryRow {
-  id: number;
+  id: string;
   name: string;
   price: number;
   stock: number;
   images: unknown;
   status: string;
-  category_id: number;
-  category: { name: string; type: string; season: string | null }[] | null;
+  category_id: string | null;
+  category: { name: string; slug: string | null; parent_id: string | null }[] | null;
 }
 
 interface OrderItemQueryRow {
-  id: number;
-  order_id: number;
-  product_id: number;
+  id: string;
+  order_id: string;
+  product_id: string;
   quantity: number;
-  price: number;
-  order: { status: string; created_at: string; customer_id: string; courier_name: string | null; tracking_status: string | null }[] | null;
-  product: { name: string }[] | null;
-}
-
-interface EarningsQueryRow {
-  id: number;
-  order_id: number;
-  product_id: number;
-  quantity: number;
-  price: number;
-  order: { created_at: string; status: string }[] | null;
+  unit_price: number;
+  order: { order_status?: string; created_at?: string; customer_id?: string; customer_name?: string }[] | null;
   product: { name: string }[] | null;
 }
 
 interface CashoutQueryRow {
-  id: number;
+  id: string;
   amount: number;
   status: string;
   created_at: string;
+}
+
+interface SellerRow {
+  id: string;
+  user_id: string;
+  store_name: string;
+  store_description: string | null;
+  status: string;
 }
 
 export interface SellerProductData {
@@ -62,7 +59,7 @@ export interface SellerProductData {
 
 export interface SellerOrderData {
   id: string;
-  order_id: number;
+  order_id: string;
   product_name: string;
   customer_name: string;
   amount: number;
@@ -74,7 +71,7 @@ export interface SellerOrderData {
 
 export interface EarningsRow {
   id: string;
-  order_id: number;
+  order_id: string;
   product_name: string;
   amount: number;
   commission: number;
@@ -90,38 +87,42 @@ export interface CashoutRow {
   date: string;
 }
 
-async function getStoreId(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+async function getSeller(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
   const { data } = await supabase
-    .from("stores")
-    .select("id, name, status")
-    .eq("seller_id", userId)
+    .from("sellers")
+    .select("id, user_id, store_name, store_description, status")
+    .eq("user_id", userId)
     .maybeSingle();
-  return data;
+  return data as SellerRow | null;
 }
 
 export async function getSellerStore(): Promise<
-  | { found: true; store: { id: number; name: string; description: string | null; status: string } }
+  | { found: true; store: { id: string; name: string; description: string | null; status: string } }
   | { found: false; error: string }
 > {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { found: false, error: "Not authenticated." };
-  const { data: store } = await supabase
-    .from("stores")
-    .select("id, name, description, status")
-    .eq("seller_id", user.id)
-    .maybeSingle();
-  if (!store) return { found: false, error: "No store found." };
-  return { found: true, store };
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { found: false, error: "No seller account found." };
+  return {
+    found: true,
+    store: {
+      id: seller.id,
+      name: seller.store_name,
+      description: seller.store_description,
+      status: seller.status,
+    },
+  };
 }
 
 export async function getCategories(): Promise<
-  { categories: CategoryLookup[] } | { error: string }
+  { categories: CategoryNode[] } | { error: string }
 > {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("categories")
-    .select("id, name, type, season")
+    .select("id, name, parent_id")
     .order("name");
   if (error) return { error: error.message };
   return { categories: data ?? [] };
@@ -134,32 +135,31 @@ export async function getSellerProducts(): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
 
-  const store = await getStoreId(supabase, user.id);
-  if (!store) return { error: "No store found." };
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
 
   const { data, error } = await supabase
     .from("products")
     .select(`
-      id, name, price, stock, images, status, category_id, rejection_reason,
-      category:categories(name, type, season)
+      id, name, price, stock, images, status, category_id,
+      category:categories(name, slug, parent_id)
     `)
-    .eq("store_id", store.id)
+    .eq("seller_id", seller.id)
     .order("created_at", { ascending: false });
 
   if (error) return { error: error.message };
 
-  const products: SellerProductData[] = (data ?? []).map((p: ProductQueryRow & { rejection_reason?: string | null }) => {
+  const products: SellerProductData[] = (data ?? []).map((p: ProductQueryRow) => {
     const images: string[] = Array.isArray(p.images) ? p.images : [];
     return {
-      id: String(p.id),
+      id: p.id,
       name: p.name,
       price: p.price,
       stock: p.stock,
       image: images.length > 0 ? images[0] : "https://placehold.co/400x300/2F3D9A/FAFFC4?text=Product",
       category: p.category?.[0]?.name ?? "Uncategorized",
-      season: p.category?.[0]?.season ?? undefined,
       status: p.status,
-      rejection_reason: p.rejection_reason ?? null,
+      rejection_reason: null,
     };
   });
 
@@ -174,24 +174,26 @@ export async function createProduct(data: {
   images: string[];
   categoryName: string;
   season?: string;
+  sizes?: string[];
+  colors?: string[];
 }): Promise<{ product: SellerProductData } | { error: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
 
-  const store = await getStoreId(supabase, user.id);
-  if (!store) return { error: "No store found." };
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
 
   // Resolve category_id from name
   let categoryName = data.categoryName;
   if (data.season) {
     const seasonMap: Record<string, string> = {
-      rainy: "Rainy Season",
-      summer: "Summer Season",
-      winter: "Winter Season",
-      Rainy: "Rainy Season",
-      Summer: "Summer Season",
-      Winter: "Winter Season",
+      rainy: "Rainy",
+      summer: "Summer",
+      winter: "Winter",
+      Rainy: "Rainy",
+      Summer: "Summer",
+      Winter: "Winter",
     };
     if (data.categoryName === "Seasonal" && data.season) {
       categoryName = seasonMap[data.season] ?? data.categoryName;
@@ -209,14 +211,16 @@ export async function createProduct(data: {
   const { data: product, error } = await supabase
     .from("products")
     .insert({
-      store_id: store.id,
+      seller_id: seller.id,
       category_id: categoryId,
       name: data.name,
       description: data.description ?? null,
       price: data.price,
       stock: data.stock,
       images: data.images.length > 0 ? data.images : null,
-      status: "pending",
+      sizes: data.sizes && data.sizes.length > 0 ? data.sizes : null,
+      colors: data.colors && data.colors.length > 0 ? data.colors : null,
+      status: "pending_review",
     })
     .select("id, name, price, stock, images, status")
     .single();
@@ -225,7 +229,7 @@ export async function createProduct(data: {
 
   return {
     product: {
-      id: String(product.id),
+      id: product.id,
       name: product.name,
       price: product.price,
       stock: product.stock,
@@ -249,17 +253,16 @@ export async function updateProduct(
     images?: string[];
     categoryName?: string;
     season?: string;
+    sizes?: string[];
+    colors?: string[];
   },
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
 
-  const store = await getStoreId(supabase, user.id);
-  if (!store) return { error: "No store found." };
-
-  const numId = Number(productId);
-  if (isNaN(numId)) return { error: "Invalid product ID." };
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
 
   const updates: Record<string, unknown> = {};
   if (data.name !== undefined) updates.name = data.name;
@@ -267,13 +270,15 @@ export async function updateProduct(
   if (data.price !== undefined) updates.price = data.price;
   if (data.stock !== undefined) updates.stock = data.stock;
   if (data.images !== undefined) updates.images = data.images;
+  if (data.sizes !== undefined) updates.sizes = data.sizes;
+  if (data.colors !== undefined) updates.colors = data.colors;
 
   if (data.categoryName) {
     let catName = data.categoryName;
     if (data.season) {
       const seasonMap: Record<string, string> = {
-        rainy: "Rainy Season", summer: "Summer Season", winter: "Winter Season",
-        Rainy: "Rainy Season", Summer: "Summer Season", Winter: "Winter Season",
+        rainy: "Rainy", summer: "Summer", winter: "Winter",
+        Rainy: "Rainy", Summer: "Summer", Winter: "Winter",
       };
       if (data.categoryName === "Seasonal" && data.season) {
         catName = seasonMap[data.season] ?? data.categoryName;
@@ -290,8 +295,8 @@ export async function updateProduct(
   const { error } = await supabase
     .from("products")
     .update(updates)
-    .eq("id", numId)
-    .eq("store_id", store.id);
+    .eq("id", productId)
+    .eq("seller_id", seller.id);
 
   if (error) return { error: error.message };
   return { success: true };
@@ -304,17 +309,14 @@ export async function deleteProduct(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
 
-  const store = await getStoreId(supabase, user.id);
-  if (!store) return { error: "No store found." };
-
-  const numId = Number(productId);
-  if (isNaN(numId)) return { error: "Invalid product ID." };
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
 
   const { error } = await supabase
     .from("products")
     .delete()
-    .eq("id", numId)
-    .eq("store_id", store.id);
+    .eq("id", productId)
+    .eq("seller_id", seller.id);
 
   if (error) return { error: error.message };
   return { success: true };
@@ -327,34 +329,30 @@ export async function getSellerOrders(): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
 
-  const store = await getStoreId(supabase, user.id);
-  if (!store) return { error: "No store found." };
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
 
   const { data, error } = await supabase
     .from("order_items")
     .select(`
-      id, order_id, product_id, quantity, price,
-      order:orders(status, created_at, customer_id, courier_name, tracking_status),
+      id, order_id, product_id, quantity, unit_price,
+      order:orders(order_status, created_at, customer_id, customer_name),
       product:products(name)
     `)
-    .in("product_id", (await supabase
-      .from("products")
-      .select("id")
-      .eq("store_id", store.id)
-    ).data?.map(p => p.id) ?? [])
+    .eq("seller_id", seller.id)
     .order("order_id", { ascending: false });
 
   if (error) return { error: error.message };
 
   const orders: SellerOrderData[] = (data ?? []).map((oi: OrderItemQueryRow) => ({
-    id: String(oi.id),
+    id: oi.id,
     order_id: oi.order_id,
     product_name: oi.product?.[0]?.name ?? "Unknown",
-    customer_name: "—",
-    amount: Number(oi.price) * oi.quantity,
-    status: oi.order?.[0]?.status ?? "pending",
-    courier_name: oi.order?.[0]?.courier_name ?? null,
-    tracking_status: oi.order?.[0]?.tracking_status ?? null,
+    customer_name: oi.order?.[0]?.customer_name ?? "—",
+    amount: Number(oi.unit_price) * oi.quantity,
+    status: oi.order?.[0]?.order_status ?? "pending",
+    courier_name: null,
+    tracking_status: null,
     date: oi.order?.[0]?.created_at
       ? new Date(oi.order[0].created_at).toLocaleDateString("en-CA")
       : "—",
@@ -371,35 +369,26 @@ export async function getSellerEarnings(): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
 
-  const store = await getStoreId(supabase, user.id);
-  if (!store) return { error: "No store found." };
-
-  const { data: productIds } = await supabase
-    .from("products")
-    .select("id")
-    .eq("store_id", store.id);
-  const ids = (productIds ?? []).map(p => p.id);
-  if (ids.length === 0) {
-    return { stats: { totalSales: 0, totalOrders: 0, availableBalance: 0 }, earnings: [] };
-  }
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
 
   const { data, error } = await supabase
     .from("order_items")
     .select(`
-      id, order_id, product_id, quantity, price,
-      order:orders(created_at, status),
+      id, order_id, product_id, quantity, unit_price,
+      order:orders(created_at, order_status),
       product:products(name)
     `)
-    .in("product_id", ids)
+    .eq("seller_id", seller.id)
     .order("order_id", { ascending: false });
 
   if (error) return { error: error.message };
 
-  const earnings: EarningsRow[] = (data ?? []).map((oi: EarningsQueryRow) => {
-    const amount = Number(oi.price) * oi.quantity;
+  const earnings: EarningsRow[] = (data ?? []).map((oi: OrderItemQueryRow) => {
+    const amount = Number(oi.unit_price) * oi.quantity;
     const commission = Math.round(amount * 0.1);
     return {
-      id: String(oi.id),
+      id: oi.id,
       order_id: oi.order_id,
       product_name: oi.product?.[0]?.name ?? "Unknown",
       amount,
@@ -427,8 +416,11 @@ export async function createCashoutRequest(
 
   if (amount <= 0) return { error: "Amount must be positive." };
 
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
+
   const { error } = await supabase.from("cashout_requests").insert({
-    seller_id: user.id,
+    seller_id: seller.id,
     amount,
     status: "pending",
   });
@@ -444,16 +436,19 @@ export async function getCashoutRequests(): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
 
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
+
   const { data, error } = await supabase
     .from("cashout_requests")
     .select("id, amount, status, created_at")
-    .eq("seller_id", user.id)
+    .eq("seller_id", seller.id)
     .order("created_at", { ascending: false });
 
   if (error) return { error: error.message };
 
   const cashouts: CashoutRow[] = (data ?? []).map((cr: CashoutQueryRow) => ({
-    id: String(cr.id),
+    id: cr.id,
     amount: Number(cr.amount),
     method: "bKash",
     status: cr.status,
@@ -477,20 +472,20 @@ export async function getSellerDashboardData(): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
 
-  const store = await getStoreId(supabase, user.id);
-  if (!store) return { error: "No store found." };
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
 
   const { data: products } = await supabase
     .from("products")
     .select("status")
-    .eq("store_id", store.id);
+    .eq("seller_id", seller.id);
 
   const totalProducts = products?.length ?? 0;
-  const pendingProducts = products?.filter(p => p.status === "pending").length ?? 0;
+  const pendingProducts = products?.filter(p => p.status === "pending_review").length ?? 0;
 
   return {
-    storeName: store.name,
-    storeStatus: store.status,
+    storeName: seller.store_name,
+    storeStatus: seller.status,
     totalProducts,
     pendingProducts,
     totalSales: 0,
@@ -504,17 +499,15 @@ export async function toggleProductPublish(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
-  const store = await getStoreId(supabase, user.id);
-  if (!store) return { error: "No store found." };
-  const numId = Number(productId);
-  if (isNaN(numId)) return { error: "Invalid product ID." };
-  const newStatus = publish ? (store.status === "approved" ? "approved" : "pending") : "draft";
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
+  const newStatus = publish ? (seller.status === "approved" ? "approved" : "pending_review") : "draft";
   const adminDb = createAdminClient();
   const { error } = await adminDb
     .from("products")
     .update({ status: newStatus })
-    .eq("id", numId)
-    .eq("store_id", store.id);
+    .eq("id", productId)
+    .eq("seller_id", seller.id);
   if (error) return { error: error.message };
   return { success: true };
 }
@@ -526,13 +519,15 @@ export async function updateStore(data: {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
   const updates: Record<string, unknown> = {};
-  if (data.name !== undefined) updates.name = data.name;
-  if (data.description !== undefined) updates.description = data.description;
+  if (data.name !== undefined) updates.store_name = data.name;
+  if (data.description !== undefined) updates.store_description = data.description;
   const { error } = await supabase
-    .from("stores")
+    .from("sellers")
     .update(updates)
-    .eq("seller_id", user.id);
+    .eq("id", seller.id);
   if (error) return { error: error.message };
   return { success: true };
 }
@@ -569,36 +564,30 @@ export async function updateProfile(data: {
 }
 
 export async function getRecentActivity(): Promise<
-  { orders: { id: number; product_name: string; amount: number; status: string; date: string }[] }
+  { orders: { id: string; product_name: string; amount: number; status: string; date: string }[] }
   | { error: string }
 > {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
-  const store = await getStoreId(supabase, user.id);
-  if (!store) return { error: "No store found." };
-  const { data: productIds } = await supabase
-    .from("products")
-    .select("id")
-    .eq("store_id", store.id);
-  const ids = (productIds ?? []).map(p => p.id);
-  if (ids.length === 0) return { orders: [] };
+  const seller = await getSeller(supabase, user.id);
+  if (!seller) return { error: "No seller account found." };
   const { data, error } = await supabase
     .from("order_items")
     .select(`
-      id, order_id, product_id, quantity, price,
-      order:orders(created_at, status),
+      id, order_id, product_id, quantity, unit_price,
+      order:orders(created_at, order_status),
       product:products(name)
     `)
-    .in("product_id", ids)
+    .eq("seller_id", seller.id)
     .order("order_id", { ascending: false })
     .limit(5);
   if (error) return { error: error.message };
-  const orders = (data ?? []).map((oi: EarningsQueryRow) => ({
+  const orders = (data ?? []).map((oi: OrderItemQueryRow) => ({
     id: oi.order_id,
     product_name: oi.product?.[0]?.name ?? "Unknown",
-    amount: Number(oi.price) * oi.quantity,
-    status: oi.order?.[0]?.status ?? "pending",
+    amount: Number(oi.unit_price) * oi.quantity,
+    status: oi.order?.[0]?.order_status ?? "pending",
     date: oi.order?.[0]?.created_at
       ? new Date(oi.order[0].created_at).toLocaleDateString("en-CA")
       : "—",
@@ -609,7 +598,7 @@ export async function getRecentActivity(): Promise<
 export async function getOrderDetails(orderId: string): Promise<
   | {
       order: {
-        id: number;
+        id: string;
         total: number;
         status: string;
         customer_name: string;
@@ -625,37 +614,34 @@ export async function getOrderDetails(orderId: string): Promise<
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
-  const numId = Number(orderId);
-  if (isNaN(numId)) return { error: "Invalid order ID." };
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
-    .select(`id, total, status, created_at, customer_id, courier_name`)
-    .eq("id", numId)
+    .select(`id, total, order_status, created_at, customer_id, customer_name, customer_phone, shipping_address, shipping_city, shipping_area, payment_method`)
+    .eq("id", orderId)
     .single();
   if (orderError) return { error: orderError.message };
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, phone")
-    .eq("id", orderData.customer_id)
-    .single();
   const { data: items } = await supabase
     .from("order_items")
-    .select(`quantity, price, product:products(name)`)
-    .eq("order_id", numId);
+    .select(`quantity, unit_price, product_name`)
+    .eq("order_id", orderId);
   return {
     order: {
       id: orderData.id,
       total: Number(orderData.total),
-      status: orderData.status,
-      customer_name: profile?.full_name ?? "—",
-      customer_phone: profile?.phone ?? "—",
-      shipping_address: "—",
-      payment_method: "—",
+      status: orderData.order_status,
+      customer_name: orderData.customer_name ?? "—",
+      customer_phone: orderData.customer_phone ?? "—",
+      shipping_address: [
+        orderData.shipping_address,
+        orderData.shipping_area,
+        orderData.shipping_city,
+      ].filter(Boolean).join(", ") || "—",
+      payment_method: orderData.payment_method ?? "—",
       created_at: new Date(orderData.created_at).toLocaleDateString("en-CA"),
-      items: (items ?? []).map((i: { quantity: number; price: number; product: { name: string }[] | null }) => ({
-        product_name: i.product?.[0]?.name ?? "Unknown",
+      items: (items ?? []).map((i: { quantity: number; unit_price: number; product_name: string }) => ({
+        product_name: i.product_name ?? "Unknown",
         quantity: i.quantity,
-        price: Number(i.price),
+        price: Number(i.unit_price),
       })),
     },
   };
@@ -668,15 +654,13 @@ export async function updateOrderStatus(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
-  const numId = Number(orderId);
-  if (isNaN(numId)) return { error: "Invalid order ID." };
   const allowed = ["pending", "processing", "shipped"];
   if (!allowed.includes(status)) return { error: "Cannot set this status." };
   const adminDb = createAdminClient();
   const { error } = await adminDb
     .from("orders")
-    .update({ status })
-    .eq("id", numId);
+    .update({ order_status: status })
+    .eq("id", orderId);
   if (error) return { error: error.message };
   return { success: true };
 }

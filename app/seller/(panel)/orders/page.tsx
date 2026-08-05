@@ -21,17 +21,17 @@ const nextStatus: Record<string, string[]> = {
 };
 
 export default function SellerOrdersPage() {
-  const [orders, setOrders] = useState<{ id: string; order_id: number; product_name: string; amount: number; status: string; date: string; customer_name: string }[]>([]);
+  const [orders, setOrders] = useState<{ id: string; order_id: string; product_name: string; amount: number; status: string; date: string; customer_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<{
-    id: number; total: number; status: string; customer_name: string; customer_phone: string; shipping_address: string;
+    id: string; total: number; status: string; customer_name: string; customer_phone: string; shipping_address: string;
     payment_method: string; created_at: string; items: { product_name: string; quantity: number; price: number }[];
   } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -50,17 +50,17 @@ export default function SellerOrdersPage() {
     return true;
   });
 
-  const handleViewDetail = async (orderId: number) => {
+  const handleViewDetail = async (orderId: string) => {
     setDetailLoading(true);
-    const res = await getOrderDetails(String(orderId));
+    const res = await getOrderDetails(orderId);
     if ("error" in res) { setError(res.error); setDetailLoading(false); return; }
     setSelectedOrder(res.order);
     setDetailLoading(false);
   };
 
-  const handleStatusUpdate = async (orderId: number, status: string) => {
+  const handleStatusUpdate = async (orderId: string, status: string) => {
     setActionLoading(orderId);
-    const res = await updateOrderStatus(String(orderId), status);
+    const res = await updateOrderStatus(orderId, status);
     if ("error" in res) { setError(res.error); setActionLoading(null); return; }
     setOrders(prev => prev.map(o => o.order_id === orderId ? { ...o, status } : o));
     setSelectedOrder(prev => prev && prev.id === orderId ? { ...prev, status } : prev);

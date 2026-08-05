@@ -126,6 +126,45 @@ export default function ProductPage() {
                 </span>
               </div>
 
+              {(product.sizes.length > 0 || product.colors.length > 0) && (
+                <div className="mt-5 space-y-4">
+                  {product.sizes.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-text/40 uppercase tracking-wide">
+                        Available Sizes
+                      </span>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {product.sizes.map((s) => (
+                          <span
+                            key={s}
+                            className="neu-pressed bg-surface text-text/80 text-xs font-medium px-3 py-1.5 rounded-lg"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {product.colors.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-text/40 uppercase tracking-wide">
+                        Available Colors
+                      </span>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {product.colors.map((c) => (
+                          <span
+                            key={c}
+                            className="neu-pressed bg-surface text-text/80 text-xs font-medium px-3 py-1.5 rounded-lg"
+                          >
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-4 mt-6">
                 <span className="text-sm text-text/70">Quantity:</span>
                 <div className="flex items-center gap-2">

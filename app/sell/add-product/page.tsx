@@ -6,17 +6,16 @@ import Image from "next/image";
 import { Upload, X, CheckCircle } from "lucide-react";
 import { getCategories, createProduct } from "@/lib/actions/seller";
 import { uploadProductImages } from "@/lib/actions/upload";
-import clsx from "clsx";
 
 export default function AddProductPage() {
   const router = useRouter();
-  const [categories, setCategories] = useState<{ name: string; type: string; season: string | null }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string; parent_id: string | null }[]>([]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
+  const [parentId, setParentId] = useState("");
   const [category, setCategory] = useState("");
-  const [season, setSeason] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -31,10 +30,12 @@ export default function AddProductPage() {
     });
   }, []);
 
-  const normalCats = categories.filter((c) => c.type === "normal").map((c) => c.name);
-  const seasonalPeriods = Array.from(
-    new Set(categories.filter((c) => c.type === "seasonal").map((c) => c.season).filter(Boolean)),
-  ) as string[];
+  const normalCats = categories.filter((c) => !c.parent_id).map((c) => c.name);
+  const parents = categories.filter((c) => !c.parent_id);
+  const selectedParent = parents.find((p) => p.id === parentId);
+  const children = categories.filter((c) => c.parent_id === parentId);
+  const selectedCategoryName =
+    category || (selectedParent ? selectedParent.name : "") || "";
 
   const handleFiles = (newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles).filter((f) => f.type.startsWith("image/"));
@@ -55,12 +56,9 @@ export default function AddProductPage() {
 
   const handleSubmit = async () => {
     setError("");
-    if (!name || !price || !category) {
+    const categoryName = selectedCategoryName;
+    if (!name || !price || !categoryName) {
       setError("Name, price, and category are required.");
-      return;
-    }
-    if (category === "Seasonal" && !season) {
-      setError("Please select a season for seasonal products.");
       return;
     }
 
@@ -86,8 +84,7 @@ export default function AddProductPage() {
       price: Number(price),
       stock: Number(stock) || 0,
       images: imageUrls,
-      categoryName: category,
-      season: category === "Seasonal" ? season : undefined,
+      categoryName,
     });
 
     if ("error" in res) {
@@ -181,38 +178,41 @@ export default function AddProductPage() {
           <div>
             <label className="text-sm text-text/70 mb-1 block">Category *</label>
             <select
-              value={category}
-              onChange={(e) => { setCategory(e.target.value); if (e.target.value !== "Seasonal") setSeason(""); }}
+              value={parentId}
+              onChange={(e) => { setParentId(e.target.value); setCategory(""); }}
               className={`${formInputClass} appearance-none`}
             >
               <option value="">Select category</option>
               {normalCats.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
-              <option value="Seasonal">Seasonal</option>
             </select>
           </div>
 
-          {category === "Seasonal" && (
+          {parentId && (
             <div>
-              <label className="text-sm text-text/70 mb-1 block">Season *</label>
-              <div className="flex gap-3">
-                {seasonalPeriods.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSeason(s)}
-                    className={clsx(
-                      "flex-1 neu-pressed bg-surface text-sm font-medium rounded-xl px-4 py-2.5 transition-all capitalize border-2 focus:outline-none focus:ring-2 focus:ring-accent",
-                      season === s
-                        ? "border-accent text-accent"
-                        : "border-transparent text-text/60 hover:text-text",
-                    )}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+              <label className="text-sm text-text/70 mb-1 block">Subcategory</label>
+              {children.length > 0 ? (
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className={`${formInputClass} appearance-none`}
+                >
+                  <option value="">Select subcategory</option>
+                  {selectedParent && (
+                    <option value={selectedParent.name}>
+                      Use {selectedParent.name} directly
+                    </option>
+                  )}
+                  {children.map((c) => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-text/50 mt-1">
+                  This category has no subcategories — it will be used directly.
+                </p>
+              )}
             </div>
           )}
 
